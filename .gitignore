@@ -3,3 +3,7 @@ runtime/build.zip
 *.loop.vxl
 test/*/main.vxc
 test/*/main.loop.vxc
+
+.replit
+replit.nix
+.ccls-cache
