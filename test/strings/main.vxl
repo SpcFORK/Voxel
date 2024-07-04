@@ -8,6 +8,18 @@ syscall io_out("Size: ");
 syscall io_out(string.size);
 syscall io_out("\n");
 
+syscall io_out("Length: ");
+syscall io_out(string.length);
+syscall io_out("\n");
+
+syscall io_out("Character at index 2: ");
+syscall io_out(string[2]);
+syscall io_out("\n");
+
+syscall io_out("Byte at index 2: ");
+syscall io_out(string.byteAt(2));
+syscall io_out("\n");
+
 syscall io_out("Reversed: ");
 syscall io_out(string.reverse());
 syscall io_out("\n");
@@ -32,8 +44,38 @@ syscall io_out("Pad end: ");
 syscall io_out(string.padEnd(10, "123"));
 syscall io_out("\n");
 
+syscall io_out("String to buffer: ");
+syscall io_out(string.toBuffer());
+syscall io_out("\n");
+
 var numericString = "1234";
 
 syscall io_out("Numeric string to number + 1: ");
 syscall io_out(numericString.toNumber() + 1);
+syscall io_out("\n");
+
+var multibyteString = "Tést © £10";
+
+syscall io_out("Multibyte string size: ");
+syscall io_out(multibyteString.size);
+syscall io_out("\n");
+
+syscall io_out("Multibyte string length: ");
+syscall io_out(multibyteString.length);
+syscall io_out("\n");
+
+syscall io_out("Multibyte string substring: ");
+syscall io_out(multibyteString.substring(0, 4));
+syscall io_out("\n");
+
+syscall io_out("Multibyte string substring: ");
+syscall io_out(multibyteString.substring(7));
+syscall io_out("\n");
+
+syscall io_out("Multibyte string character at index 5: ");
+syscall io_out(multibyteString[5]);
+syscall io_out("\n");
+
+syscall io_out("Multibyte string byte at index 4: ");
+syscall io_out(multibyteString.byteAt(4));
 syscall io_out("\n");

@@ -133,6 +133,7 @@ void voxel_builtins_core_getItem(voxel_Executor* executor) {
 
     switch (thing->type) {
         case VOXEL_TYPE_BUFFER: return voxel_builtins_core_getBufferByte(executor);
+        case VOXEL_TYPE_STRING: return voxel_builtins_core_getStringChar(executor);
         case VOXEL_TYPE_OBJECT: return voxel_builtins_core_getObjectItem(executor);
         case VOXEL_TYPE_LIST: return voxel_builtins_core_getListItem(executor);
     }
@@ -198,6 +199,7 @@ void voxel_builtins_core_getLength(voxel_Executor* executor) {
     voxel_Thing* thing = voxel_peek(executor, 1);
 
     switch (thing->type) {
+        case VOXEL_TYPE_STRING: return voxel_builtins_core_getStringLength(executor);
         case VOXEL_TYPE_OBJECT: return voxel_builtins_core_getObjectLength(executor);
         case VOXEL_TYPE_LIST: return voxel_builtins_core_getListLength(executor);
     }
@@ -327,6 +329,7 @@ void voxel_builtins_core(voxel_Context* context) {
     voxel_defineBuiltin(context, ".Ti", &voxel_builtins_core_isInstance);
 
     voxel_defineBuiltin(context, ".B", &voxel_builtins_core_newBuffer);
+    voxel_defineBuiltin(context, ".B2S", &voxel_builtins_core_bufferToString);
     voxel_defineBuiltin(context, ".Bg", &voxel_builtins_core_getBufferByte);
     voxel_defineBuiltin(context, ".Bs", &voxel_builtins_core_setBufferByte);
     voxel_defineBuiltin(context, ".Bf", &voxel_builtins_core_fillBuffer);
@@ -334,9 +337,15 @@ void voxel_builtins_core(voxel_Context* context) {
     voxel_defineBuiltin(context, ".Bz", &voxel_builtins_core_getBufferSize);
 
     voxel_defineBuiltin(context, ".S2N", &voxel_builtins_core_stringToNumber);
+    voxel_defineBuiltin(context, ".S2B", &voxel_builtins_core_stringToBuffer);
     voxel_defineBuiltin(context, ".Sz", &voxel_builtins_core_getStringSize);
+    voxel_defineBuiltin(context, ".Sl", &voxel_builtins_core_getStringLength);
+    voxel_defineBuiltin(context, ".Sb", &voxel_builtins_core_stringCharIndexToByteIndex);
+    voxel_defineBuiltin(context, ".Sr", &voxel_builtins_core_getStringByteRange);
+    voxel_defineBuiltin(context, ".Sg", &voxel_builtins_core_getStringChar);
+    voxel_defineBuiltin(context, ".Sgb", &voxel_builtins_core_getStringByte);
     voxel_defineBuiltin(context, ".Sa", &voxel_builtins_core_appendToString);
-    voxel_defineBuiltin(context, ".Sr", &voxel_builtins_core_reverseString);
+    voxel_defineBuiltin(context, ".Sre", &voxel_builtins_core_reverseString);
     voxel_defineBuiltin(context, ".Scs", &voxel_builtins_core_cutStringStart);
     voxel_defineBuiltin(context, ".Sce", &voxel_builtins_core_cutStringEnd);
     voxel_defineBuiltin(context, ".Sps", &voxel_builtins_core_padStringStart);
