@@ -15,6 +15,7 @@ Examples of Voxel programs can be found in the [`examples`](examples) and [`test
 ## Key features of the Voxel programming language
 * **Functions** — named and anonymous
     * **Closures** that allow references to non-global variables outside a function's scope
+    * [**Spread and rest syntax (`...`)**](docs/en/voxel/spreadrest.md) to dynamically provide argument values to functions and allow functions to become variadic
 * [**Expressions**](docs/en/voxel/expressions.md) that follow a defined operator precedence
     * **Short-circuit evaluation** of logical operators using `&&` and `||` (evaluation of subsequent operands is aborted if result's value is guaranteed to be `true` or `false`)
     * **Eager evaluation** of logical operators using `&&&` and `|||` (all operands are evaluated — this produces simpler bytecode but may perform unnecessary computations at runtime)
@@ -38,6 +39,7 @@ Examples of Voxel programs can be found in the [`examples`](examples) and [`test
     * **Tree shaking** to remove functions that are never called and variables that are never read
     * **Potential side effect detection** when deciding how unused variables should be removed so that their assigned value is still evaluated if its expression contains a function call or getter method
 * **Multithreading** through the [`threads` library](docs/en/stdlib/threads.md), which allows multiple functions to be executed concurrently
+* **String pattern matching** through the `patterns` library, which is an alternative to regular expressions found in other programming languages
 
 ## Key features of the VxC bytecode format
 * **Stack-based virtual machine** that enables powerful manipulation of data and easy passing of data as arguments to commands

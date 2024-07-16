@@ -29,6 +29,18 @@ export const ALL_BINARY_OPERATOR_CODE = {
         codeGen.number(2),
         codeGen.systemCall("-")
     ),
+    "<<": codeGen.join(
+        codeGen.number(2),
+        codeGen.systemCall("<<")
+    ),
+    ">>": codeGen.join(
+        codeGen.number(2),
+        codeGen.systemCall(">>")
+    ),
+    ">>>": codeGen.join(
+        codeGen.number(2),
+        codeGen.systemCall(">>>")
+    ),
     "<=": codeGen.join(
         codeGen.number(2),
         codeGen.systemCall("<=")
@@ -43,6 +55,18 @@ export const ALL_BINARY_OPERATOR_CODE = {
     "!=": codeGen.bytes(codeGen.vxcTokens.EQUAL, codeGen.vxcTokens.NOT),
     "===": codeGen.bytes(codeGen.vxcTokens.IDENTICAL),
     "==": codeGen.bytes(codeGen.vxcTokens.EQUAL),
+    "&": codeGen.join(
+        codeGen.number(2),
+        codeGen.systemCall("&")
+    ),
+    "^": codeGen.join(
+        codeGen.number(2),
+        codeGen.systemCall("^")
+    ),
+    "|": codeGen.join(
+        codeGen.number(2),
+        codeGen.systemCall("|")
+    ),
     "&&&": codeGen.bytes(codeGen.vxcTokens.AND),
     "&&": codeGen.bytes(codeGen.vxcTokens.AND),
     "|||": codeGen.bytes(codeGen.vxcTokens.OR),
@@ -185,7 +209,9 @@ export class ThingNode extends ast.AstNode {
             instance.value = {
                 "true": true,
                 "false": false,
-                "null": null
+                "null": null,
+                "infinity": Infinity,
+                "nan": NaN
             }[token.value] ?? null;
         } else if (token instanceof tokeniser.TypeNameToken) {
             this.eat(tokens, [new ast.TokenQuery(tokeniser.BracketToken, "(")]);
@@ -579,6 +605,7 @@ export class FunctionParametersNode extends ast.AstNode {
     ];
 
     parameters = [];
+    restAtIndex = null;
 
     static create(tokens, namespace) {
         var instance = new this();
@@ -594,6 +621,16 @@ export class FunctionParametersNode extends ast.AstNode {
 
             if (addedFirstParameter) {
                 this.eat(tokens, [new ast.TokenQuery(tokeniser.DelimeterToken)]);
+            }
+
+            var restToken = this.maybeEat(tokens, [new ast.TokenQuery(tokeniser.OperatorToken, "...")]);
+
+            if (restToken) {
+                if (instance.restAtIndex != null) {
+                    throw new sources.SourceError("Only one rest parameter (...) is allowed in a parameter list", spreadingToken?.sourceContainer, spreadingToken?.location);
+                }
+
+                instance.restAtIndex = instance.parameters.length;
             }
 
             instance.parameters.push(
@@ -615,6 +652,45 @@ export class FunctionParametersNode extends ast.AstNode {
     }
 
     generateCode(options) {
+        if (this.restAtIndex != null) {
+            var currentCode = codeGen.join(
+                codeGen.systemCall("Lo"),
+                this.parameters[this.restAtIndex].generateCode(options),
+                codeGen.bytes(codeGen.vxcTokens.VAR)
+            );
+
+            var remainingParameters = [...this.parameters];
+
+            for (var i = 0; i < this.restAtIndex; i++) {
+                currentCode = codeGen.join(
+                    currentCode,
+                    codeGen.bytes(codeGen.vxcTokens.DUPE, codeGen.vxcTokens.DUPE),
+                    codeGen.number(0),
+                    codeGen.number(2),
+                    codeGen.systemCall("Lg"),
+                    remainingParameters.shift().generateCode(options),
+                    codeGen.bytes(codeGen.vxcTokens.VAR, codeGen.vxcTokens.POP),
+                    codeGen.number(0),
+                    codeGen.number(2),
+                    codeGen.systemCall("Lr"),
+                    codeGen.bytes(codeGen.vxcTokens.POP)
+                );
+            }
+
+            for (var i = 0; i < this.parameters.length - this.restAtIndex - 1; i++) {
+                currentCode = codeGen.join(
+                    currentCode,
+                    codeGen.bytes(codeGen.vxcTokens.DUPE),
+                    codeGen.number(1),
+                    codeGen.systemCall("Lp"),
+                    remainingParameters.pop().generateCode(options),
+                    codeGen.bytes(codeGen.vxcTokens.VAR, codeGen.vxcTokens.POP)
+                );
+            }
+
+            return codeGen.join(currentCode, codeGen.bytes(codeGen.vxcTokens.POP));
+        }
+
         return codeGen.join(
             codeGen.number(this.parameters.length),
             codeGen.systemCall("P"),
@@ -1099,10 +1175,33 @@ export class FunctionArgumentsNode extends ast.AstNode {
 
     generateCode(options) {
         if (this.spreading.length == 1 && this.spreading[0]) {
-            // TODO: Allow spreading multiple args
-
             return codeGen.join(
                 this.children[0].generateCode(options),
+                codeGen.number(1),
+                codeGen.systemCall("Au")
+            );
+        }
+
+        if (this.spreading.find((isSpreading) => isSpreading)) {
+            var currentCode = codeGen.bytes();
+
+            for (var i = 0; i < this.children.length; i++) {
+                currentCode = codeGen.join(
+                    currentCode,
+                    this.children[i].generateCode(options),
+                    this.spreading[i] ? codeGen.bytes() : codeGen.join(
+                        codeGen.number(1),
+                        codeGen.systemCall("Lo")
+                    ),
+                    codeGen.number(2),
+                    codeGen.systemCall("Lc")
+                );
+            }
+
+            return codeGen.join(
+                codeGen.number(0),
+                codeGen.systemCall("L"),
+                currentCode,
                 codeGen.number(1),
                 codeGen.systemCall("Au")
             );
@@ -1117,6 +1216,33 @@ export class FunctionArgumentsNode extends ast.AstNode {
 
 export class ConstructorArgumentsNode extends FunctionArgumentsNode {
     generateCode(options) {
+        if (this.spreading.length == 1 && this.spreading[0]) {
+            return this.children[0].generateCode(options);
+        }
+
+        if (this.spreading.find((isSpreading) => isSpreading)) {
+            var currentCode = codeGen.bytes();
+
+            for (var i = 0; i < this.children.length; i++) {
+                currentCode = codeGen.join(
+                    currentCode,
+                    this.children[i].generateCode(options),
+                    this.spreading[i] ? codeGen.bytes() : codeGen.join(
+                        codeGen.number(1),
+                        codeGen.systemCall("Lo")
+                    ),
+                    codeGen.number(2),
+                    codeGen.systemCall("Lc")
+                );
+            }
+
+            return codeGen.join(
+                codeGen.number(0),
+                codeGen.systemCall("L"),
+                currentCode
+            );
+        }
+
         return codeGen.join(
             ...this.children.map((child) => child.generateCode(options)),
             codeGen.number(this.children.length),
@@ -1402,6 +1528,7 @@ export class ExpressionNode extends ast.AstNode {
         ...staticMacros.StaticMacroNode.MATCH_QUERIES,
         new ast.TokenQuery(tokeniser.IncrementationOperatorToken),
         new ast.TokenQuery(tokeniser.OperatorToken, "-"),
+        new ast.TokenQuery(tokeniser.OperatorToken, "~"),
         new ast.TokenQuery(tokeniser.OperatorToken, "!"),
         new ast.TokenQuery(tokeniser.OperatorToken, "&")
     ];
@@ -1649,6 +1776,7 @@ export class ExpressionLeafNode extends ExpressionNode {
         if (instance.addChildByMatching(tokens, [
             UnaryPrefixIncrementationOperatorExpressionNode,
             UnaryNegativeOperatorExpressionNode,
+            UnaryBitwiseNotOperatorExpressionNode,
             UnaryNotOperatorExpressionNode,
             CopyOperatorExpressionNode
         ], namespace)) {
@@ -1791,6 +1919,19 @@ export class UnaryNegativeOperatorExpressionNode extends UnaryPrefixOperatorExpr
 
     estimateTruthiness() {
         return this.children[0].estimateTruthiness();
+    }
+}
+
+export class UnaryBitwiseNotOperatorExpressionNode extends UnaryPrefixOperatorExpressionNode {
+    static MATCH_QUERIES = [new ast.TokenQuery(tokeniser.OperatorToken, "~")];
+
+    static OPERATOR_CODE = codeGen.join(
+        codeGen.number(1),
+        codeGen.systemCall("~x")
+    );
+
+    estimateTruthiness() {
+        return null;
     }
 }
 
@@ -1942,6 +2083,20 @@ export class AdditionSubtractionOperatorExpressionNode extends BinaryOperatorExp
     }
 }
 
+export class BitwiseShiftOperatorExpressionNode extends BinaryOperatorExpressionNode {
+    static OPERATOR_TOKEN_QUERIES = [
+        new ast.TokenQuery(tokeniser.OperatorToken, "<<"),
+        new ast.TokenQuery(tokeniser.OperatorToken, ">>"),
+        new ast.TokenQuery(tokeniser.OperatorToken, ">>>")
+    ];
+
+    static CHILD_EXPRESSION_NODE_CLASS = AdditionSubtractionOperatorExpressionNode;
+
+    estimateTruthiness() {
+        return null;
+    }
+}
+
 export class EqualityOperatorExpressionNode extends BinaryOperatorExpressionNode {
     static OPERATOR_TOKEN_QUERIES = [
         new ast.TokenQuery(tokeniser.OperatorToken, "<="),
@@ -1954,7 +2109,7 @@ export class EqualityOperatorExpressionNode extends BinaryOperatorExpressionNode
         new ast.TokenQuery(tokeniser.OperatorToken, "==")
     ];
 
-    static CHILD_EXPRESSION_NODE_CLASS = AdditionSubtractionOperatorExpressionNode;
+    static CHILD_EXPRESSION_NODE_CLASS = BitwiseShiftOperatorExpressionNode;
 
     estimateTruthiness() {
         return null;
@@ -2025,12 +2180,48 @@ export class InstanceOperatorExpressionNode extends BinaryOperatorExpressionNode
     }
 }
 
+export class BitwiseAndOperatorExpressionNode extends BinaryOperatorExpressionNode {
+    static OPERATOR_TOKEN_QUERIES = [
+        new ast.TokenQuery(tokeniser.OperatorToken, "&")
+    ];
+
+    static CHILD_EXPRESSION_NODE_CLASS = InstanceOperatorExpressionNode;
+
+    estimateTruthiness() {
+        return null;
+    }
+}
+
+export class BitwiseXorOperatorExpressionNode extends BinaryOperatorExpressionNode {
+    static OPERATOR_TOKEN_QUERIES = [
+        new ast.TokenQuery(tokeniser.OperatorToken, "^")
+    ];
+
+    static CHILD_EXPRESSION_NODE_CLASS = BitwiseAndOperatorExpressionNode;
+
+    estimateTruthiness() {
+        return null;
+    }
+}
+
+export class BitwiseOrOperatorExpressionNode extends BinaryOperatorExpressionNode {
+    static OPERATOR_TOKEN_QUERIES = [
+        new ast.TokenQuery(tokeniser.OperatorToken, "|")
+    ];
+
+    static CHILD_EXPRESSION_NODE_CLASS = BitwiseXorOperatorExpressionNode;
+
+    estimateTruthiness() {
+        return null;
+    }
+}
+
 export class LogicalEagerAndOperatorExpressionNode extends BinaryOperatorExpressionNode {
     static OPERATOR_TOKEN_QUERIES = [
         new ast.TokenQuery(tokeniser.OperatorToken, "&&&")
     ];
 
-    static CHILD_EXPRESSION_NODE_CLASS = InstanceOperatorExpressionNode;
+    static CHILD_EXPRESSION_NODE_CLASS = BitwiseOrOperatorExpressionNode;
 
     estimateTruthiness() {
         var anyUnknown = false;

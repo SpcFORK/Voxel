@@ -535,6 +535,7 @@ VOXEL_ERRORABLE voxel_popFromList(voxel_Context* context, voxel_Thing* thing);
 VOXEL_ERRORABLE voxel_insertIntoList(voxel_Context* context, voxel_Thing* thing, voxel_Count index, voxel_Thing* value);
 voxel_Count voxel_getListLength(voxel_Thing* thing);
 VOXEL_ERRORABLE voxel_joinList(voxel_Context* context, voxel_Thing* thing, voxel_Thing* delimeter);
+VOXEL_ERRORABLE voxel_concatList(voxel_Context* context, voxel_Thing* destination, voxel_Thing* source);
 
 VOXEL_ERRORABLE voxel_registerEnumEntry(voxel_Context* context, voxel_Thing* value, voxel_Thing* identifier);
 voxel_Thing* voxel_getEnumEntryFromLookup(voxel_Context* context, voxel_Thing* value);
@@ -603,11 +604,33 @@ void voxel_test();
         voxel_unreferenceThing(executor->context, b); \
     }
 
+#define _VOXEL_BUILTINS_CORE_NUMBER_INT_OPERATOR(name, operator) void name(voxel_Executor* executor) { \
+        voxel_Int argCount = voxel_popNumberInt(executor); \
+        voxel_Thing* b = voxel_popNumber(executor); \
+        voxel_Thing* a = voxel_popNumber(executor); \
+\
+        if (!a || !b) { \
+            voxel_pushNull(executor); \
+\
+            return; \
+        } \
+\
+        voxel_push(executor, voxel_newNumberInt(executor->context, voxel_getNumberInt(a) operator voxel_getNumberInt(b))); \
+\
+        voxel_unreferenceThing(executor->context, a); \
+        voxel_unreferenceThing(executor->context, b); \
+    }
+
 _VOXEL_BUILTINS_CORE_NUMBER_OPERATOR(voxel_builtins_core_subtract, -);
 _VOXEL_BUILTINS_CORE_NUMBER_OPERATOR(voxel_builtins_core_multiply, *);
 _VOXEL_BUILTINS_CORE_NUMBER_OPERATOR(voxel_builtins_core_divide, /);
 _VOXEL_BUILTINS_CORE_NUMBER_OPERATOR(voxel_builtins_core_lessThanOrEqualTo, <=);
 _VOXEL_BUILTINS_CORE_NUMBER_OPERATOR(voxel_builtins_core_greaterThanOrEqualTo, >=);
+_VOXEL_BUILTINS_CORE_NUMBER_INT_OPERATOR(voxel_builtins_core_bitwiseLeftShift, <<);
+_VOXEL_BUILTINS_CORE_NUMBER_INT_OPERATOR(voxel_builtins_core_bitwiseRightShift, >>);
+_VOXEL_BUILTINS_CORE_NUMBER_INT_OPERATOR(voxel_builtins_core_bitwise_and, &);
+_VOXEL_BUILTINS_CORE_NUMBER_INT_OPERATOR(voxel_builtins_core_bitwise_xor, ^);
+_VOXEL_BUILTINS_CORE_NUMBER_INT_OPERATOR(voxel_builtins_core_bitwise_or, |);
 
 void voxel_builtins_core_add(voxel_Executor* executor) {
     voxel_Int argCount = voxel_popNumberInt(executor);
@@ -657,6 +680,21 @@ void voxel_builtins_core_modulo(voxel_Executor* executor) {
     voxel_push(executor, voxel_newNumberInt(executor->context, a % b));
 }
 
+void voxel_builtins_core_bitwiseUnsignedRightShift(voxel_Executor* executor) {
+    voxel_Int argCount = voxel_popNumberInt(executor);
+    voxel_Thing* b = voxel_popNumber(executor);
+    voxel_Thing* a = voxel_popNumber(executor);
+
+    if (!a || !b) {
+        return voxel_pushNull(executor);
+    }
+
+    voxel_push(executor, voxel_newNumberInt(executor->context, (voxel_UInt)voxel_getNumberInt(a) >> voxel_getNumberInt(b)));
+
+    voxel_unreferenceThing(executor->context, a);
+    voxel_unreferenceThing(executor->context, b);
+}
+
 void voxel_builtins_core_equal(voxel_Executor* executor) {
     voxel_Int argCount = voxel_popNumberInt(executor);
     voxel_Thing* b = voxel_pop(executor);
@@ -696,6 +734,19 @@ void voxel_builtins_core_negate(voxel_Executor* executor) {
     }
 
     voxel_push(executor, voxel_newNumberFloat(executor->context, -voxel_getNumberFloat(value)));
+
+    voxel_unreferenceThing(executor->context, value);
+}
+
+void voxel_builtins_core_bitwiseNot(voxel_Executor* executor) {
+    voxel_Int argCount = voxel_popNumberInt(executor);
+    voxel_Thing* value = voxel_popNumber(executor);
+
+    if (!value) {
+        return voxel_pushNull(executor);
+    }
+
+    voxel_push(executor, voxel_newNumberInt(executor->context, ~voxel_getNumberInt(value)));
 
     voxel_unreferenceThing(executor->context, value);
 }
@@ -1653,9 +1704,9 @@ void voxel_builtins_core_pushOntoList(voxel_Executor* executor) {
 
     value->referenceCount--;
 
-    voxel_unreferenceThing(executor->context, list);
-
     voxel_push(executor, voxel_newNumberInt(executor->context, voxel_getListLength(list)));
+
+    voxel_unreferenceThing(executor->context, list);
 }
 
 void voxel_builtins_core_popFromList(voxel_Executor* executor) {
@@ -1747,6 +1798,28 @@ void voxel_builtins_core_joinList(voxel_Executor* executor) {
     voxel_unreferenceThing(executor->context, delimeter);
 
     voxel_push(executor, (voxel_Thing*)result.value);
+}
+
+void voxel_builtins_core_concatList(voxel_Executor* executor) {
+    voxel_Int argCount = voxel_popNumberInt(executor);
+    voxel_Thing* source = voxel_pop(executor);
+    voxel_Thing* destination = voxel_pop(executor);
+
+    if (
+        !source || source->type != VOXEL_TYPE_LIST ||
+        !destination || destination->type != VOXEL_TYPE_LIST ||
+        argCount < 2
+    ) {
+        voxel_unreferenceThing(executor->context, source);
+
+        return voxel_push(executor, destination);
+    }
+
+    voxel_concatList(executor->context, destination, source);
+
+    voxel_unreferenceThing(executor->context, source);
+
+    voxel_push(executor, destination);
 }
 
 #endif
@@ -1890,11 +1963,11 @@ void voxel_builtins_core_pushThis(voxel_Executor* executor) {
 void voxel_builtins_core_popThis(voxel_Executor* executor) {
     voxel_Int argCount = voxel_popNumberInt(executor);
 
+    voxel_unreferenceThing(executor->context, executor->nextThis);
+
     VOXEL_ERRORABLE popResult = voxel_popFromList(executor->context, executor->thisStack);
 
     executor->nextThis = !VOXEL_IS_ERROR(popResult) ? (voxel_Thing*)popResult.value : voxel_newNull(executor->context);
-
-    voxel_unreferenceThing(executor->context, executor->nextThis);
 
     voxel_pushNull(executor);
 }
@@ -1907,9 +1980,9 @@ void voxel_builtins_core_setNextThis(voxel_Executor* executor) {
         return voxel_pushNull(executor);
     }
 
-    executor->nextThis = nextThis;
+    voxel_unreferenceThing(executor->context, executor->nextThis);
 
-    voxel_unreferenceThing(executor->context, nextThis);
+    executor->nextThis = nextThis;
 
     voxel_pushNull(executor);
 }
@@ -2113,8 +2186,15 @@ void voxel_builtins_core(voxel_Context* context) {
     voxel_defineBuiltin(context, "./", &voxel_builtins_core_divide);
     voxel_defineBuiltin(context, ".%", &voxel_builtins_core_modulo);
     voxel_defineBuiltin(context, ".-x", &voxel_builtins_core_negate);
+    voxel_defineBuiltin(context, ".~x", &voxel_builtins_core_bitwiseNot);
     voxel_defineBuiltin(context, ".<=", &voxel_builtins_core_lessThanOrEqualTo);
     voxel_defineBuiltin(context, ".>=", &voxel_builtins_core_greaterThanOrEqualTo);
+    voxel_defineBuiltin(context, ".<<", &voxel_builtins_core_bitwiseLeftShift);
+    voxel_defineBuiltin(context, ".>>", &voxel_builtins_core_bitwiseRightShift);
+    voxel_defineBuiltin(context, ".>>>", &voxel_builtins_core_bitwiseUnsignedRightShift);
+    voxel_defineBuiltin(context, ".&", &voxel_builtins_core_bitwise_and);
+    voxel_defineBuiltin(context, ".^", &voxel_builtins_core_bitwise_xor);
+    voxel_defineBuiltin(context, ".|", &voxel_builtins_core_bitwise_or);
     voxel_defineBuiltin(context, ".++", &voxel_builtins_core_increment);
     voxel_defineBuiltin(context, ".--", &voxel_builtins_core_decrement);
 
@@ -2178,6 +2258,7 @@ void voxel_builtins_core(voxel_Context* context) {
     voxel_defineBuiltin(context, ".Li", &voxel_builtins_core_insertIntoList);
     voxel_defineBuiltin(context, ".Ll", &voxel_builtins_core_getListLength);
     voxel_defineBuiltin(context, ".Lj", &voxel_builtins_core_joinList);
+    voxel_defineBuiltin(context, ".Lc", &voxel_builtins_core_concatList);
 }
 
 #else
@@ -4515,6 +4596,19 @@ VOXEL_ERRORABLE voxel_joinList(voxel_Context* context, voxel_Thing* thing, voxel
     return VOXEL_OK_RET(string);
 }
 
+VOXEL_ERRORABLE voxel_concatList(voxel_Context* context, voxel_Thing* destination, voxel_Thing* source) {
+    voxel_List* sourceList = (voxel_List*)source->value;
+    voxel_ListItem* currentListItem = (voxel_ListItem*)sourceList->firstItem;
+
+    while (currentListItem) {
+        VOXEL_MUST(voxel_pushOntoList(context, destination, currentListItem->value));
+
+        currentListItem = currentListItem->nextItem;
+    }
+
+    return VOXEL_OK_RET(destination);
+}
+
 // src/enums.h
 
 VOXEL_ERRORABLE voxel_registerEnumEntry(voxel_Context* context, voxel_Thing* value, voxel_Thing* identifier) {
@@ -4534,48 +4628,10 @@ VOXEL_ERRORABLE voxel_notOperation(voxel_Context* context, voxel_Thing* thing) {
 }
 
 VOXEL_ERRORABLE voxel_andOperation(voxel_Context* context, voxel_Thing* a, voxel_Thing* b) {
-    if (a->type == VOXEL_TYPE_BYTE) {
-        VOXEL_ERRORABLE bByteResult = voxel_thingToByte(context, b); VOXEL_MUST(bByteResult);
-        voxel_Thing* bByte = (voxel_Thing*)bByteResult.value;
-        voxel_Thing* result = voxel_newByte(context, (voxel_IntPtr)a->value & (voxel_IntPtr)bByte->value);
-
-        VOXEL_MUST(voxel_unreferenceThing(context, bByte));
-
-        return VOXEL_OK_RET(result);
-    }
-
-    if (a->type == VOXEL_TYPE_NUMBER) {
-        VOXEL_ERRORABLE bNumberResult = voxel_thingToNumber(context, b); VOXEL_MUST(bNumberResult);
-        voxel_Thing* bNumber = (voxel_Thing*)bNumberResult.value;
-
-        VOXEL_MUST(voxel_unreferenceThing(context, bNumber));
-
-        return VOXEL_OK_RET(voxel_newNumberInt(context, voxel_getNumberInt(a) & voxel_getNumberInt(bNumber)));
-    }
-
     return VOXEL_OK_RET(voxel_newBoolean(context, voxel_thingIsTruthy(a) && voxel_thingIsTruthy(b)));
 }
 
 VOXEL_ERRORABLE voxel_orOperation(voxel_Context* context, voxel_Thing* a, voxel_Thing* b) {
-    if (a->type == VOXEL_TYPE_BYTE) {
-        VOXEL_ERRORABLE bByteResult = voxel_thingToByte(context, b); VOXEL_MUST(bByteResult);
-        voxel_Thing* bByte = (voxel_Thing*)bByteResult.value;
-        voxel_Thing* result = voxel_newByte(context, (voxel_IntPtr)a->value | (voxel_IntPtr)bByte->value);
-
-        VOXEL_MUST(voxel_unreferenceThing(context, bByte));
-
-        return VOXEL_OK_RET(result);
-    }
-
-    if (a->type == VOXEL_TYPE_NUMBER) {
-        VOXEL_ERRORABLE bNumberResult = voxel_thingToNumber(context, b); VOXEL_MUST(bNumberResult);
-        voxel_Thing* bNumber = (voxel_Thing*)bNumberResult.value;
-
-        VOXEL_MUST(voxel_unreferenceThing(context, bNumber));
-
-        return VOXEL_OK_RET(voxel_newNumberInt(context, voxel_getNumberInt(a) | voxel_getNumberInt(bNumber)));
-    }
-
     return VOXEL_OK_RET(voxel_newBoolean(context, voxel_thingIsTruthy(a) || voxel_thingIsTruthy(b)));
 }
 
@@ -5105,7 +5161,8 @@ VOXEL_ERRORABLE voxel_stepExecutor(voxel_Executor* executor) {
         case VOXEL_TOKEN_TYPE_THIS:
         {
             voxel_List* thisStackList = (voxel_List*)executor->thisStack->value;
-            voxel_Thing* thisThing = thisStackList->lastItem->value;
+            voxel_ListItem* thisStackListItem = thisStackList->lastItem;
+            voxel_Thing* thisThing = thisStackListItem ? thisStackListItem->value : voxel_newNull(executor->context);
 
             thisThing->referenceCount++;
 

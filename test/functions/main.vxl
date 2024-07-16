@@ -100,6 +100,20 @@ function fibonacci(n) {
     return fibonacci(n - 1) + fibonacci(n - 2);
 }
 
+function reportArgs(...args) {
+    return "[" + args.join(", ") + "]";
+}
+
+function reportArgsFirstLast(first, second, ...args, penultimate, last) {
+    return (
+        "first = " + first + ", " +
+        "second = " + second + ", " +
+        "args = [" + args.join(", ") + "], " +
+        "penultimate = " + penultimate + ", " +
+        "last = " + last
+    );
+}
+
 voidReturn();
 
 var valueReturnResult = valueReturn();
@@ -167,3 +181,15 @@ var anonymousFunction = function() {
 }
 
 anonymousFunction();
+
+syscall io_out("Spread all args: ");
+syscall io_out(reportArgs(...[1, 2, 3, 4]));
+syscall io_out("\n");
+
+syscall io_out("Spread some args: ");
+syscall io_out(reportArgs(5, ...[6, 7], 8));
+syscall io_out("\n");
+
+syscall io_out("Complex rest parameter usage: ");
+syscall io_out(reportArgsFirstLast(...[7, 8], 9, ...[10, 11], 12));
+syscall io_out("\n");

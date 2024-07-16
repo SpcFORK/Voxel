@@ -1,0 +1,158 @@
+function _stringToBuffer(value) {
+    if (value is String) {
+        return value.toBuffer();
+    }
+
+    return value;
+}
+
+function pattern(selectors) {
+    return function(input, index) {
+        var captures = {};
+        var currentIndex = &index;
+
+        for (var i = 0; i < selectors.length; i++) {
+            var result = selectors[i](input, currentIndex);
+
+            if (!result.matches) {
+                return {matches: false, index: index};
+            }
+
+            currentIndex = result.index;
+
+            (result.captures ?? {}).forEach(function(captureList, key) {
+                captures[key] ??= [];
+
+                captureList.forEach(function(value) {
+                    captures[key].push(value);
+                });
+            });
+        }
+
+        return {matches: true, index: currentIndex, captures: captures};
+    };
+}
+
+function string(value) {
+    value = _stringToBuffer(value);
+
+    return function(input, index) {
+        for (var i = 0; i < value.size; i++) {
+            if (value[i] != input[index + i]) {
+                return {matches: false, index: index};
+            }
+        }
+
+        return {matches: true, index: index + value.size};
+    };
+}
+
+function any(selectors) {
+    return function(input, index) {
+        for (var i = 0; i < selectors.length; i++) {
+            var result = selectors[i](input, index);
+
+            if (result.matches) {
+                return result;
+            }
+        }
+
+        return {matches: false, index: index};
+    };
+}
+
+function anyChar(chars) {
+    return function(input, index) {
+        for (var i = 0; i < chars.length; i++) {
+            var result = string(chars[i])(input, index);
+
+            if (result.matches) {
+                return result;
+            }
+        }
+
+        return {matches: false, index: index};
+    };
+}
+
+function anyString(strings) {
+    return any(strings.map(function(value) {
+        return string(value);
+    }));
+}
+
+function byteRangeBetween(start, end) {
+    return function(input, index) {
+        var byte = input[index];
+
+        if (byte >= start &&& byte <= end) {
+            return {matches: true, index: index + 1};
+        }
+
+        return {matches: false, index: index};
+    };
+}
+
+function repeat(min, max, selectors) {
+    return function(input, index) {
+        var result;
+        var captures = {};
+        var currentIndex = &index;
+
+        for (var i = 1; i <= max; i++) {
+            result = pattern(selectors)(input, currentIndex);
+
+            if (!result.matches) {
+                if (i > min) {
+                    break;
+                }
+
+                return {matches: false, index: index};
+            }
+
+            currentIndex = result.index;
+
+            (result.captures ?? {}).forEach(function(captureList, key) {
+                captures[key] ??= [];
+
+                captureList.forEach(function(value) {
+                    captures[key].push(value);
+                });
+            });
+        }
+
+        return {matches: true, index: currentIndex, captures: captures};
+    };
+}
+
+function match(input, selectors) {
+    input = _stringToBuffer(input);
+
+    var result = pattern(selectors)(input, 0);
+
+    if (!result.matches ||| result.index != input.size) {
+        return null;
+    }
+
+    return result;
+}
+
+function ALPHA_UPPER(...args) {
+    return byteRangeBetween(Byte("A"), Byte("Z"))(...args);
+}
+
+function ALPHA_LOWER(...args) {
+    return byteRangeBetween(Byte("a"), Byte("z"))(...args);
+}
+
+function ALPHA(...args) {
+    return any([ALPHA_UPPER, ALPHA_LOWER])(...args);
+}
+
+function DIGIT(...args) {
+    return byteRangeBetween(Byte("0"), Byte("9"))(...args);
+}
+
+function ALPHANUMERIC(...args) {
+    return any([ALPHA, DIGIT])(...args);
+}

@@ -135,11 +135,11 @@ void voxel_builtins_core_pushThis(voxel_Executor* executor) {
 void voxel_builtins_core_popThis(voxel_Executor* executor) {
     voxel_Int argCount = voxel_popNumberInt(executor);
 
+    voxel_unreferenceThing(executor->context, executor->nextThis);
+
     VOXEL_ERRORABLE popResult = voxel_popFromList(executor->context, executor->thisStack);
 
     executor->nextThis = !VOXEL_IS_ERROR(popResult) ? (voxel_Thing*)popResult.value : voxel_newNull(executor->context);
-
-    voxel_unreferenceThing(executor->context, executor->nextThis);
 
     voxel_pushNull(executor);
 }
@@ -152,9 +152,9 @@ void voxel_builtins_core_setNextThis(voxel_Executor* executor) {
         return voxel_pushNull(executor);
     }
 
-    executor->nextThis = nextThis;
+    voxel_unreferenceThing(executor->context, executor->nextThis);
 
-    voxel_unreferenceThing(executor->context, nextThis);
+    executor->nextThis = nextThis;
 
     voxel_pushNull(executor);
 }
@@ -358,8 +358,15 @@ void voxel_builtins_core(voxel_Context* context) {
     voxel_defineBuiltin(context, "./", &voxel_builtins_core_divide);
     voxel_defineBuiltin(context, ".%", &voxel_builtins_core_modulo);
     voxel_defineBuiltin(context, ".-x", &voxel_builtins_core_negate);
+    voxel_defineBuiltin(context, ".~x", &voxel_builtins_core_bitwiseNot);
     voxel_defineBuiltin(context, ".<=", &voxel_builtins_core_lessThanOrEqualTo);
     voxel_defineBuiltin(context, ".>=", &voxel_builtins_core_greaterThanOrEqualTo);
+    voxel_defineBuiltin(context, ".<<", &voxel_builtins_core_bitwiseLeftShift);
+    voxel_defineBuiltin(context, ".>>", &voxel_builtins_core_bitwiseRightShift);
+    voxel_defineBuiltin(context, ".>>>", &voxel_builtins_core_bitwiseUnsignedRightShift);
+    voxel_defineBuiltin(context, ".&", &voxel_builtins_core_bitwise_and);
+    voxel_defineBuiltin(context, ".^", &voxel_builtins_core_bitwise_xor);
+    voxel_defineBuiltin(context, ".|", &voxel_builtins_core_bitwise_or);
     voxel_defineBuiltin(context, ".++", &voxel_builtins_core_increment);
     voxel_defineBuiltin(context, ".--", &voxel_builtins_core_decrement);
 
@@ -423,6 +430,7 @@ void voxel_builtins_core(voxel_Context* context) {
     voxel_defineBuiltin(context, ".Li", &voxel_builtins_core_insertIntoList);
     voxel_defineBuiltin(context, ".Ll", &voxel_builtins_core_getListLength);
     voxel_defineBuiltin(context, ".Lj", &voxel_builtins_core_joinList);
+    voxel_defineBuiltin(context, ".Lc", &voxel_builtins_core_concatList);
 }
 
 #else
